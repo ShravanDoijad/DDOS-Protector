@@ -1,29 +1,26 @@
 const redisClient = require('../config/redis');
+const getClientIp = require('../utils/getUserIp');
+
+const ROUTES = { login: 10, admin: 15, signup: 5, reset: 8 };
 
 const threatScoring = async (req, res, next) => {
-    try {
-        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-        let score = await redisClient.get(`score:${ip}`);
-        score = score ? parseInt(score) : 0;
+  try {
+    const ip = getClientIp(req);
+    let score = parseInt(await redisClient.get(`score:${ip}`)) || 0;
+    const route = req.originalUrl.toLowerCase();
+    let delta = 0;
 
-        const route =req.originalUrl;
-        if(route.includes('login')){
-            score += 10;
-        }
-        if(route.includes('admin')){
-            score += 15;
-        }
-
-        await redisClient.set(`score:${ip}`, score, 'EX', 60 * 10);
-
-        req.threatScore = score;
-        next();
+    for (const [k, pts] of Object.entries(ROUTES)) {
+      if (route.includes(k)) delta += pts;
     }
-    catch (err) {
-        console.error('Threat scoring error:', err);
-        res.status(500).json({ message: 'Internal server error' });
-        next();
-    }
+    // Decay: clean requests slowly lower the score
+    if (delta === 0 && score > 0) delta = -5;
+
+    score = Math.max(0, score + delta);
+    await redisClient.set(`score:${ip}`, score, 'EX', 600);
+    req.threatScore = score;
+    next();
+  } catch { next(); }
 };
 
 module.exports = threatScoring;

@@ -1,28 +1,36 @@
 const redisClient = require('../config/redis');
-const RATE_LIMIT_WINDOW = 60; 
-const MAX_REQUESTS = 300; // Increased from 100 to accommodate live dashboard polling
+const getClientIp = require('../utils/getUserIp');
 
-const rateLimiter = async (req, res, next) => {
-    try {
-        const ip = req.ip;
-        console.log(`Incoming request from IP: ${ip}`);
-        const currentTime = Math.floor(Date.now() / 1000); // Current time in seconds
-        const requests = await redisClient.get(ip);
-        if(requests && parseInt(requests)>= MAX_REQUESTS){
-            return res.status(429).json({ message: 'Too many requests. Please try again later.' });
-        }
-        if(requests){
-            await redisClient.incr(ip);
-        }
-        else{
-            await redisClient.set(ip, 1, 'EX', RATE_LIMIT_WINDOW);
-        }
-        next();
-    }
-    catch (err) {
-        console.error('Rate limiter error:', err);
-        res.status(500).json({ message: 'Internal server error' });
-    }
+const LIMITS = {
+  '/api/login':  [10,  60],   
+  '/api/signup': [5,   60],
+  '/api/reset':  [3,  300],
+  '/api/upload': [20,  60],
+  '/api/search': [60,  60],
+  default:       [300, 60],
 };
 
-module.exports = rateLimiter;
+const getLimit = (p) => {
+  for (const [r, l] of Object.entries(LIMITS))
+    if (r !== 'default' && p.startsWith(r)) return l;
+  return LIMITS.default;
+};
+
+const smartRateLimit = async (req, res, next) => {
+  try {
+    const ip = getClientIp(req);
+    const [max, win] = getLimit(req.path);
+    const key = `rl:${ip}:${req.path.split('/').slice(0, 3).join('/')}`;
+    const n = parseInt(await redisClient.get(key)) || 0;
+    if (n >= max) {
+      res.set('Retry-After', win);
+      return res.status(429).json({ message: 'Rate limit exceeded.', limit: max, retryAfter: win });
+    }
+    n === 0 ? await redisClient.set(key, 1, 'EX', win) : await redisClient.incr(key);
+    res.set('X-RateLimit-Limit', max);
+    res.set('X-RateLimit-Remaining', max - n - 1);
+    next();
+  } catch { next(); }
+};
+
+module.exports = smartRateLimit;

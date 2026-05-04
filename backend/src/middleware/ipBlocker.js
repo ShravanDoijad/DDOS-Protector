@@ -1,8 +1,9 @@
 const redisClient = require('../config/redis');
+const getClientIp = require('../utils/getUserIp');
 
 const ipBlocker = async (req, res, next) => {
     try {
-        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+        const ip = getClientIp(req);
         const isBlocked = await redisClient.get(`blocked:${ip}`);
         if(isBlocked){
             return res.status(403).json({ message: 'Your IP has been blocked due to suspicious activity.' });

@@ -1,10 +1,11 @@
 const redisClient = require('../config/redis');
+const getClientIp = require('../utils/getUserIp');
 
 const threatDetection = async (req, res, next) => {
     const timeWindow = 10;
     const requestThreshold = 100; // Increased from 10 to prevent false blocks during normal usage
     try {
-        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+        const ip = getClientIp(req);
         const endPoint = req.originalUrl;
         
         const key = `threat:${ip}:${endPoint}`;

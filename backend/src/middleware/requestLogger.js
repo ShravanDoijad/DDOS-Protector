@@ -1,8 +1,9 @@
 const redisClient = require('../config/redis');
+const getClientIp = require('../utils/getUserIp');
 
 const requestLogger = async (req, res, next) => {
     try {
-        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+        const ip = getClientIp(req);
         const method = req.method;
         const url = req.originalUrl;
         const userAgent = req.headers['user-agent'] || 'Unknown';

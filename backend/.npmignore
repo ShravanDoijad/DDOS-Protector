@@ -1,0 +1,6 @@
+.env
+*.tgz
+test_attacks.js
+simulate_attack.js
+src/routes/log.js
+node_modules/

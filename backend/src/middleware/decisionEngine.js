@@ -1,35 +1,25 @@
 const redisClient = require('../config/redis');
+const getClientIp = require('../utils/getUserIp');
+const { sendAlert } = require('../utils/alert');
 
 const decisionEngine = async (req, res, next) => {
-    try {
-        let score = req.threatScore || 0; 
-        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-        const isBlocked = await redisClient.get(`blocked:${ip}`);
-        if(isBlocked){
-            return res.status(403).json({ message: 'Your IP has been blocked due to suspicious activity.' });
-        }
-        score = score ? parseInt(score) : 0;
-        if(score > 60){
-            await redisClient.set(`blocked:${ip}`, '1', 'EX', 60 * 30);
-            return res.status(403).json({ message: 'Your IP has been blocked due to suspicious activity.' });
+  try {
+    const ip = getClientIp(req);
+    let score = parseInt(req.threatScore) || 0;
 
-        }
-        if(score > 40){
-            await redisClient.set(`blocked:${ip}`, '1', 'EX', 60 * 5);
-            return res.status(403).json({ message: 'Your IP has a high threat score. Access denied for temporary.' });
-
-        }
-        if(score > 20){
-            await new Promise((resolve)=> setTimeout(resolve, 1500));
-
-        }
-        next();
+    if (score > 60) {
+      await redisClient.set(`blocked:${ip}`, '1', 'EX', 60 * 30);
+      sendAlert({ ip, event: 'IP Blocked', severity: 'high', detail: `IP exceeded threat score threshold (${score} > 60). Blocked for 30 minutes.` });
+      return res.status(403).json({ message: 'Blocked: high threat score.' });
     }
-    catch (err) {
-        console.error('Decision engine error:', err);
-        res.status(500).json({ message: 'Internal server error' });
-        next();
+    if (score > 40) {
+      await redisClient.set(`blocked:${ip}`, '1', 'EX', 60 * 5);
+      sendAlert({ ip, event: 'Temporary Block', severity: 'medium', detail: `IP received temporary block due to high score (${score} > 40).` });
+      return res.status(429).json({ message: 'Temporarily blocked.' });
     }
+    if (score > 20) await new Promise(r => setTimeout(r, 1500));
+    next();
+  } catch { next(); }
 };
 
 module.exports = decisionEngine;

@@ -1,5 +1,5 @@
 import { useDashboardData } from "../hooks/useDashboardData";
-import { api } from "../api";
+import { api } from "../services/api";
 import { ShieldAlert, ServerCrash, Activity, ShieldBan } from "lucide-react";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";

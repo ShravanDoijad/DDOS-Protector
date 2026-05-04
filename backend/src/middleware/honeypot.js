@@ -1,0 +1,22 @@
+const redisClient = require('../config/redis');
+const getClientIp = require('../utils/getUserIp');
+const { sendAlert } = require('../utils/alert');
+
+const TRAPS = [
+  '/.env', '/.git', '/wp-admin', '/wp-login.php',
+  '/phpmyadmin', '/config.php', '/shell.php', '/xmlrpc.php',
+  '/.DS_Store', '/backup.zip', '/eval-stdin.php',
+];
+
+const honeypot = async (req, res, next) => {
+  const p = req.path.toLowerCase();
+  if (!TRAPS.some(t => p.startsWith(t))) return next();
+
+  const ip = getClientIp(req);
+  await redisClient.set(`blocked:${ip}`, 'honeypot', 'EX', 86400); 
+  console.warn(`Honeypot triggered: ${ip} hit ${req.path}`);
+  sendAlert({ ip, event: 'Honeypot Triggered', severity: 'high', detail: `IP hit hidden trap route: ${req.path}. Blocked for 24 hours.` });
+  res.status(404).send('Not found');
+};
+
+module.exports = honeypot;

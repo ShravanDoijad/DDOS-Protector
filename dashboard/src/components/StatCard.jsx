@@ -1,34 +1,66 @@
-import { motion } from "framer-motion";
+import { motion } from 'framer-motion';
 
-const colorStyles = {
-  red: "text-red-400 border-red-500/20 bg-gradient-to-br from-red-500/10 to-transparent shadow-[0_0_15px_rgba(239,68,68,0.1)]",
-  green: "text-green-400 border-green-500/20 bg-gradient-to-br from-green-500/10 to-transparent shadow-[0_0_15px_rgba(34,197,94,0.1)]",
-  yellow: "text-yellow-400 border-yellow-500/20 bg-gradient-to-br from-yellow-500/10 to-transparent shadow-[0_0_15px_rgba(234,179,8,0.1)]",
-  blue: "text-blue-400 border-blue-500/20 bg-gradient-to-br from-blue-500/10 to-transparent shadow-[0_0_15px_rgba(59,130,246,0.1)]",
+const themes = {
+  green:  { accent: '#00ffaa', glow: 'rgba(0,255,170,0.15)',  border: 'rgba(0,255,170,0.2)'  },
+  red:    { accent: '#ff4466', glow: 'rgba(255,68,102,0.15)', border: 'rgba(255,68,102,0.2)' },
+  yellow: { accent: '#ffaa00', glow: 'rgba(255,170,0,0.15)',  border: 'rgba(255,170,0,0.2)'  },
+  blue:   { accent: '#00d4ff', glow: 'rgba(0,212,255,0.15)',  border: 'rgba(0,212,255,0.2)'  },
 };
 
-export default function StatCard({ title, value, color = "blue", icon: Icon }) {
+export default function StatCard({ title, value, sub, color = 'green', icon: Icon, trend, prefix = '', suffix = '' }) {
+  const t = themes[color] || themes.green;
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ scale: 1.05, translateY: -5 }}
-      className={`relative overflow-hidden backdrop-blur-xl p-6 rounded-2xl border transition-all duration-300 ${colorStyles[color]}`}
+      style={{
+        background: 'var(--surface)',
+        border: `1px solid ${t.border}`,
+        borderRadius: 10,
+        padding: '20px 22px',
+        position: 'relative',
+        overflow: 'hidden',
+        boxShadow: `0 0 30px ${t.glow}`,
+      }}
     >
-      <div className="flex justify-between items-start">
-        <div>
-          <p className="text-gray-400 text-sm font-medium mb-2 uppercase tracking-wider">{title}</p>
-          <h3 className="text-4xl font-bold text-white">{value}</h3>
-        </div>
-        {Icon && (
-          <div className={`p-3 rounded-lg bg-gray-900/50 backdrop-blur-sm border border-gray-800 ${colorStyles[color].split(" ")[0]}`}>
-            <Icon className="w-6 h-6" />
-          </div>
-        )}
+      {/* Corner bracket decoration */}
+      <div style={{ position: 'absolute', top: 8, right: 8, opacity: 0.3 }}>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M12 0H8V4" stroke={t.accent} strokeWidth="1.5"/>
+          <path d="M0 12H4V8" stroke={t.accent} strokeWidth="1.5"/>
+        </svg>
       </div>
-      
-      {/* Decorative background glow */}
-      <div className={`absolute -right-6 -top-6 w-24 h-24 rounded-full blur-2xl opacity-20 bg-current`} />
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        <span style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: '0.12em', fontFamily: 'var(--mono)' }}>
+          {title.toUpperCase()}
+        </span>
+        {Icon && <Icon size={14} color={t.accent} />}
+      </div>
+
+      <div style={{ fontFamily: 'var(--display)', fontWeight: 800, fontSize: 34, color: t.accent, lineHeight: 1, textShadow: `0 0 20px ${t.accent}60` }}>
+        {prefix}{typeof value === 'number' ? value.toLocaleString() : (value ?? '—')}{suffix}
+      </div>
+
+      {sub && (
+        <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 6, fontFamily: 'var(--mono)' }}>
+          {sub}
+        </div>
+      )}
+
+      {trend !== undefined && (
+        <div style={{ fontSize: 10, color: trend >= 0 ? '#ff4466' : '#00ffaa', marginTop: 4 }}>
+          {trend >= 0 ? '↑' : '↓'} {Math.abs(trend)}% vs last min
+        </div>
+      )}
+
+      {/* Background glow */}
+      <div style={{
+        position: 'absolute', bottom: -20, right: -20,
+        width: 80, height: 80, borderRadius: '50%',
+        background: t.glow, filter: 'blur(20px)',
+        pointerEvents: 'none',
+      }} />
     </motion.div>
   );
 }

@@ -1,11 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const dashboardController = require('../controllers/dashboardController');
+const {
+  getSummary, getLogs, clearLogs, getThreats,
+  getBlockedIps, unblockIp, blockIp, health,
+} = require('../controllers/dashboardController');
 
-router.get('/logs', dashboardController.getLogs);
-router.get('/blocked-ips', dashboardController.getBlockedIps);
-router.delete('/blocked-ips/:ip', dashboardController.unblockIp);
-router.get('/threats', dashboardController.getThreats);
-router.get('/summary', dashboardController.getSummary);
+router.get('/health', health);
+router.get('/summary', getSummary);
+router.get('/logs', getLogs);
+router.delete('/logs', clearLogs);
+router.get('/threats', getThreats);
+router.get('/blocked-ips', getBlockedIps);
+router.delete('/blocked-ips/:ip', unblockIp);
+router.post('/blocked-ips', blockIp);
 
 module.exports = router;

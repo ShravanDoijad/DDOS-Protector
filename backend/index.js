@@ -1,0 +1,30 @@
+const honeypot      = require('./src/middleware/honeypot');
+const ipBlocker     = require('./src/middleware/ipBlocker');
+const botDetection  = require('./src/middleware/botDetection');
+const inputSanitizer = require('./src/middleware/inputSanitizer');
+const threatScoring  = require('./src/middleware/threatScoring');
+const decisionEngine = require('./src/middleware/decisionEngine');
+const rateLimitter = require('./src/middleware/rateLimitter');
+
+function shield(config = {}) {
+  const stack = [];
+  if (config.honeypot?.enabled !== false) stack.push(honeypot);
+  stack.push(ipBlocker);
+  stack.push(rateLimitter);
+  if (config.botDetection?.enabled !== false) stack.push(botDetection);
+  if (config.inputSanitizer?.enabled !== false) stack.push(inputSanitizer);
+  stack.push(threatScoring);
+  stack.push(decisionEngine);
+
+  return (req, res, next) => {
+    let i = 0;
+    const run = (err) => {
+      if (err) return next(err);
+      if (i >= stack.length) return next();
+      stack[i++](req, res, run);
+    };
+    run();
+  };
+}
+
+module.exports = shield;

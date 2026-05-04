@@ -1,119 +1,185 @@
-import { useDashboardData } from "../hooks/useDashboardData";
-import { api } from "../api";
-import StatCard from "../components/StatCard";
-import TrafficChart from "../charts/TrafficChart";
-import AlertBox from "../components/AlertBox";
-import { Activity, ShieldBan, AlertTriangle, Zap, ServerCrash } from "lucide-react";
-import { motion } from "framer-motion";
+import { useLiveData } from '../hooks/useLiveData';
+import { api } from '../services/api';
+import StatCard from '../components/StatCard';
+import TopBar from '../components/TopBar';
+import { TrafficChart, ThreatScoreChart } from '../charts/Charts';
+import { Activity, ShieldBan, AlertTriangle, Zap, Globe, Clock } from 'lucide-react';
+import { motion } from 'framer-motion';
+
+function Loader() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', flexDirection: 'column', gap: 12 }}>
+      <div style={{ width: 36, height: 36, borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: '#00ffaa', animation: 'spin 0.8s linear infinite' }} />
+      <span style={{ fontSize: 11, color: 'var(--text3)', letterSpacing: '0.1em' }}>CONNECTING...</span>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+function SectionTitle({ children }) {
+  return (
+    <div style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: '0.15em', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ color: '#00ffaa' }}>■</span>
+      {children.toUpperCase()}
+    </div>
+  );
+}
 
 export default function Dashboard() {
-  const { data, loading, error } = useDashboardData(api.getSummary, 5000);
+  const { data, loading, error, refetch, lastUpdated } = useLiveData(api.getSummary, 4000);
+  const { data: threats } = useLiveData(api.getThreats, 6000);
 
-  if (loading) {
-    return (
-      <div className="flex-1 p-8 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
-      </div>
-    );
-  }
+  const alerts = [];
+  if (data?.threats > 0) alerts.push(`${data.threats} active threats detected`);
+  if (data?.blocked > 10) alerts.push(`${data.blocked} IPs currently blocked`);
+  if (data?.rps > 50) alerts.push(`High traffic: ${data.rps} req/s`);
 
-  if (error) {
-    return (
-      <div className="flex-1 p-8 flex items-center justify-center text-red-500">
-        <ServerCrash className="w-8 h-8 mr-3" />
-        <span>Failed to load dashboard data: {error.message || error}</span>
-      </div>
-    );
-  }
+  if (loading) return <Loader />;
+
+  if (error) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', flexDirection: 'column', gap: 10 }}>
+      <div style={{ fontSize: 32, color: '#ff4466' }}>⚠</div>
+      <div style={{ fontSize: 12, color: 'var(--text2)' }}>Backend unreachable</div>
+      <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', maxWidth: 300, textAlign: 'center' }}>{error}</div>
+      <button onClick={refetch} style={{
+        marginTop: 8, padding: '7px 16px', background: 'rgba(0,255,170,0.08)',
+        border: '1px solid rgba(0,255,170,0.3)', borderRadius: 6, color: '#00ffaa',
+        fontSize: 11, cursor: 'pointer',
+      }}>RETRY</button>
+    </div>
+  );
+
+  const topIps = data?.topIps || [];
+  const methodBreakdown = data?.methodBreakdown || {};
+  const methods = Object.entries(methodBreakdown);
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto">
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between mb-8"
-      >
-        <div>
-          <h2 className="text-3xl font-bold text-white tracking-tight">System Overview</h2>
-          <p className="text-gray-400 mt-1">Real-time DDoS protection monitoring via Axios API Gateway</p>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <TopBar
+        title="Security Overview"
+        subtitle="Real-time shield-express monitoring"
+        alerts={alerts}
+        onRefresh={refetch}
+        lastUpdated={lastUpdated}
+      />
+
+      <div style={{ padding: '24px 28px', flex: 1 }}>
+        {/* Stat cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
+          <StatCard title="Total Requests" value={data?.requests ?? 0} color="blue" icon={Activity} sub="since startup" />
+          <StatCard title="Blocked IPs" value={data?.blocked ?? 0} color="red" icon={ShieldBan} sub="active blocks" />
+          <StatCard title="Active Threats" value={data?.threats ?? 0} color="yellow" icon={AlertTriangle} sub="scoring > 0" />
+          <StatCard title="Requests / sec" value={data?.rps ?? 0} color="green" icon={Zap} sub="10s rolling avg" />
         </div>
-        <div className="bg-gray-800/50 backdrop-blur-md px-4 py-2 rounded-full border border-gray-700/50 flex items-center">
-          <span className="text-sm text-gray-300">Live Traffic</span>
-          <span className="ml-3 flex h-2.5 w-2.5 relative">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
-          </span>
-        </div>
-      </motion.div>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <StatCard title="Total Requests" value={data?.requests || 0} color="blue" icon={Activity} />
-        <StatCard title="Blocked IPs" value={data?.blocked || 0} color="red" icon={ShieldBan} />
-        <StatCard title="Active Threats" value={data?.threats || 0} color="yellow" icon={AlertTriangle} />
-        <StatCard title="Requests / Sec" value={data?.rps || 0} color="green" icon={Zap} />
-      </div>
-
-      {/* Alerts - show only if there are active threats */}
-      {data?.threats > 0 && (
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="mb-8 space-y-3"
-        >
-          <AlertBox
-            message={`${data.threats} active threats detected in the network.`}
-            type="warning"
-          />
-        </motion.div>
-      )}
-
-      {/* Chart + Side Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Chart */}
-        <div className="lg:col-span-2 bg-gray-900/50 backdrop-blur-xl p-6 rounded-2xl border border-gray-800 shadow-2xl">
-          <div className="mb-6 flex justify-between items-center">
-            <h3 className="text-xl font-bold text-white">Traffic Analysis</h3>
+        {/* Row 2 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 28 }}>
+          {/* Traffic chart */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
+            <SectionTitle>Live Traffic</SectionTitle>
+            <div style={{ height: 200 }}>
+              <TrafficChart liveRps={data?.rps ?? 0} />
+            </div>
+            <div style={{ display: 'flex', gap: 16, marginTop: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--text3)' }}>
+                <div style={{ width: 20, height: 2, background: '#00ffaa' }} /> req/s
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'var(--text3)' }}>
+                <div style={{ width: 20, height: 2, background: '#ff4466' }} /> blocked
+              </div>
+            </div>
           </div>
-          <div className="h-[300px]">
-            <TrafficChart data={data?.recentTraffic} />
+
+          {/* Threat scores chart */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
+            <SectionTitle>Threat Score Distribution</SectionTitle>
+            <div style={{ height: 200 }}>
+              <ThreatScoreChart threats={threats || []} />
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 10 }}>
+              {threats?.length ?? 0} IPs with active scores · max {threats?.reduce((m, t) => Math.max(m, t.score || 0), 0) ?? 0}
+            </div>
           </div>
         </div>
 
-        {/* Side Panel */}
-        <div className="bg-gray-900/50 backdrop-blur-xl p-6 rounded-2xl border border-gray-800 shadow-2xl flex flex-col">
-          <h3 className="mb-6 text-xl font-bold text-white flex items-center">
-            <AlertTriangle className="w-5 h-5 text-yellow-500 mr-2" />
-            Top Attacking IPs
-          </h3>
-
-          <ul className="space-y-4 flex-1 overflow-y-auto pr-2">
-            {data?.topIps && data.topIps.length > 0 ? (
-              data.topIps.map((target, idx) => (
-                <motion.li 
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.1 }}
-                  key={idx} 
-                  className="flex justify-between items-center bg-gray-800/40 p-3 rounded-lg border border-gray-700/30"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                    <span className="font-mono text-sm text-gray-200">{target.ip}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs text-gray-400">Reqs:</span>
-                    <span className="text-sm font-bold text-red-400">{target.count}</span>
-                  </div>
-                </motion.li>
-              ))
+        {/* Row 3 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+          {/* Top attacking IPs */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
+            <SectionTitle>Top Attack Sources</SectionTitle>
+            {topIps.length === 0 ? (
+              <div style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'center', padding: '24px 0' }}>
+                <ShieldBan size={24} style={{ display: 'block', margin: '0 auto 8px', opacity: 0.3 }} />
+                No active attackers
+              </div>
             ) : (
-              <div className="flex flex-col items-center justify-center h-full text-gray-500 space-y-3">
-                <ShieldBan className="w-12 h-12 opacity-20" />
-                <p>No attacks detected</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {topIps.slice(0, 6).map((item, i) => (
+                  <motion.div key={i} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 10px', background: 'var(--bg3)', borderRadius: 6, border: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <span style={{ fontSize: 9, color: 'var(--text3)', width: 14 }}>{i + 1}</span>
+                      <span style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text)' }}>{item.ip}</span>
+                    </div>
+                    <span style={{ fontSize: 10, color: '#ff4466', fontFamily: 'var(--mono)' }}>{item.count}</span>
+                  </motion.div>
+                ))}
               </div>
             )}
-          </ul>
+          </div>
+
+          {/* Method breakdown */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
+            <SectionTitle>HTTP Methods</SectionTitle>
+            {methods.length === 0 ? (
+              <div style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'center', padding: '24px 0' }}>No data</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {methods.map(([method, count], i) => {
+                  const total = methods.reduce((s, [, c]) => s + c, 0);
+                  const pct = total ? Math.round((count / total) * 100) : 0;
+                  const mc = { GET: '#00ffaa', POST: '#00d4ff', PUT: '#ffaa00', DELETE: '#ff4466' };
+                  const c = mc[method] || 'var(--text2)';
+                  return (
+                    <div key={i}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: 10, color: c, fontFamily: 'var(--mono)' }}>{method}</span>
+                        <span style={{ fontSize: 10, color: 'var(--text3)' }}>{count} · {pct}%</span>
+                      </div>
+                      <div style={{ height: 3, background: 'var(--bg3)', borderRadius: 2, overflow: 'hidden' }}>
+                        <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8, delay: i * 0.1 }}
+                          style={{ height: '100%', background: c, borderRadius: 2 }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Recent activity */}
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
+            <SectionTitle>Recent Activity</SectionTitle>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {(data?.recentRequests || []).slice(0, 7).map((log, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, color: 'var(--text3)' }}>
+                  <Clock size={9} />
+                  <span style={{ fontFamily: 'var(--mono)', color: 'var(--text2)', minWidth: 70 }}>
+                    {log.ip?.replace('::ffff:', '').slice(-8) || '?'}
+                  </span>
+                  <span style={{ color: log.method === 'GET' ? '#00ffaa' : log.method === 'POST' ? '#00d4ff' : '#ffaa00', minWidth: 30 }}>
+                    {log.method}
+                  </span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 80 }}>
+                    {log.url}
+                  </span>
+                </div>
+              ))}
+              {(!data?.recentRequests || data.recentRequests.length === 0) && (
+                <div style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'center', padding: '24px 0' }}>No requests logged</div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

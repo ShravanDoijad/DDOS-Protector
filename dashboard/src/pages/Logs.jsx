@@ -1,128 +1,153 @@
-import { useState } from "react";
-import { useDashboardData } from "../hooks/useDashboardData";
-import { api } from "../api";
-import { FileText, ServerCrash, Search, Clock, Globe } from "lucide-react";
-import { motion } from "framer-motion";
+import { useState, useMemo } from 'react';
+import { useLiveData } from '../hooks/useLiveData';
+import { api } from '../services/api';
+import TopBar from '../components/TopBar';
+import { Search, Trash2, Clock } from 'lucide-react';
+import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
+
+const METHOD_COLORS = {
+  GET: '#00ffaa', POST: '#00d4ff', PUT: '#ffaa00',
+  DELETE: '#ff4466', PATCH: '#b48eff', OPTIONS: 'var(--text3)',
+};
+
+const toastStyle = { style: { background: '#0d1117', color: '#00ffaa', border: '1px solid rgba(0,255,170,0.3)', fontFamily: 'var(--mono)', fontSize: 12 } };
 
 export default function Logs() {
-  const { data: logData, loading, error } = useDashboardData(api.getLogs, 3000);
-  const [search, setSearch] = useState("");
+  const { data: logData, loading, error, refetch, lastUpdated } = useLiveData(api.getLogs, 3000);
+  const [search, setSearch] = useState('');
+  const [methodFilter, setMethodFilter] = useState('ALL');
 
-  if (loading) {
-    return (
-      <div className="flex-1 p-8 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
+  const logs = Array.isArray(logData) ? logData : [];
+  const methods = ['ALL', ...Array.from(new Set(logs.map(l => l.method).filter(Boolean)))];
 
-  if (error) {
-    return (
-      <div className="flex-1 p-8 flex items-center justify-center text-red-500">
-        <ServerCrash className="w-8 h-8 mr-3" />
-        <span>Failed to load logs: {error.message || error}</span>
-      </div>
-    );
-  }
+  const filtered = useMemo(() => logs.filter(l => {
+    const q = search.toLowerCase();
+    const matchSearch = !q || (l.ip || '').toLowerCase().includes(q) || (l.url || '').toLowerCase().includes(q);
+    const matchMethod = methodFilter === 'ALL' || l.method === methodFilter;
+    return matchSearch && matchMethod;
+  }), [logs, search, methodFilter]);
 
-  const logs = logData || [];
-  const filteredLogs = logs.filter((log) =>
-    (log.ip || "").toLowerCase().includes(search.toLowerCase()) || 
-    (log.url || "").toLowerCase().includes(search.toLowerCase())
-  );
+  const handleClear = async () => {
+    try {
+      await api.clearLogs();
+      toast.success('Logs cleared', toastStyle);
+      refetch();
+    } catch { toast.error('Failed to clear logs'); }
+  };
 
-  const getMethodColor = (method) => {
-    switch (method?.toUpperCase()) {
-      case 'GET': return 'text-green-400 bg-green-500/10 border-green-500/30';
-      case 'POST': return 'text-blue-400 bg-blue-500/10 border-blue-500/30';
-      case 'PUT': return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
-      case 'DELETE': return 'text-red-400 bg-red-500/10 border-red-500/30';
-      default: return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
-    }
+  const fmtTime = (ts) => {
+    try { return new Date(ts).toLocaleTimeString('en', { hour12: false }); }
+    catch { return '?'; }
   };
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto">
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between mb-8"
-      >
-        <div className="flex items-center space-x-3">
-          <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
-            <FileText className="w-8 h-8 text-blue-500" />
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <TopBar title="Request Logs" subtitle={`${filtered.length} entries`} onRefresh={refetch} lastUpdated={lastUpdated} />
+
+      <div style={{ padding: '24px 28px' }}>
+        {/* Controls */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+            <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)' }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Filter by IP or URL..."
+              style={{ background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 6, color: 'var(--text)', fontSize: 12, fontFamily: 'var(--mono)', padding: '7px 12px 7px 32px', outline: 'none', width: '100%' }} />
           </div>
-          <div>
-            <h2 className="text-3xl font-bold text-white tracking-tight">Request Logs</h2>
-            <p className="text-gray-400 mt-1">Live stream of incoming network traffic via Axios</p>
+
+          {/* Method filter pills */}
+          <div style={{ display: 'flex', gap: 5 }}>
+            {methods.map(m => {
+              const c = METHOD_COLORS[m] || 'var(--text2)';
+              const active = methodFilter === m;
+              return (
+                <button key={m} onClick={() => setMethodFilter(m)} style={{
+                  padding: '5px 10px', fontSize: 10, borderRadius: 5, cursor: 'pointer', letterSpacing: '0.06em',
+                  fontFamily: 'var(--mono)', transition: 'all 0.15s',
+                  background: active ? `${c}20` : 'var(--bg3)',
+                  border: active ? `1px solid ${c}50` : '1px solid var(--border)',
+                  color: active ? c : 'var(--text3)',
+                }}>{m}</button>
+              );
+            })}
           </div>
+
+          {logs.length > 0 && (
+            <button onClick={handleClear} style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '7px 12px', fontSize: 10,
+              background: 'rgba(255,68,102,0.06)', border: '1px solid rgba(255,68,102,0.2)',
+              borderRadius: 6, color: '#ff4466', cursor: 'pointer', fontFamily: 'var(--mono)',
+            }}>
+              <Trash2 size={11} /> CLEAR
+            </button>
+          )}
         </div>
 
-        <div className="relative">
-          <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search IP or URL..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="bg-gray-900/50 border border-gray-700 text-white rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:border-blue-500 transition-colors w-64"
-          />
-        </div>
-      </motion.div>
+        {/* Log table */}
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+          {loading ? (
+            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text3)', fontSize: 11 }}>Loading logs...</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ padding: 60, textAlign: 'center' }}>
+              <div style={{ fontSize: 11, color: 'var(--text3)' }}>No logs match current filters</div>
+            </div>
+          ) : (
+            <>
+              {/* Terminal header */}
+              <div style={{ padding: '9px 16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 5, alignItems: 'center' }}>
+                {['red', '#ffaa00', '#00ffaa'].map(c => <div key={c} style={{ width: 8, height: 8, borderRadius: '50%', background: c, opacity: 0.5 }} />)}
+                <span style={{ fontSize: 10, color: 'var(--text3)', marginLeft: 8, fontFamily: 'var(--mono)' }}>
+                  shield-express · request.log · {filtered.length} entries
+                </span>
+              </div>
 
-      <div className="bg-gray-900/50 backdrop-blur-xl rounded-2xl border border-gray-800 shadow-2xl overflow-hidden">
-        {filteredLogs.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-800/80 text-gray-300 text-sm uppercase tracking-wider">
-                  <th className="px-6 py-4 font-medium">Timestamp</th>
-                  <th className="px-6 py-4 font-medium">IP Address</th>
-                  <th className="px-6 py-4 font-medium">Method</th>
-                  <th className="px-6 py-4 font-medium">Requested URL</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800">
-                {filteredLogs.map((log, index) => (
-                  <motion.tr
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.02 > 0.5 ? 0 : index * 0.02 }}
-                    key={index}
-                    className="hover:bg-gray-800/40 transition-colors"
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                      <div className="flex items-center">
-                        <Clock className="w-4 h-4 mr-2 opacity-50" />
-                        {new Date(log.timestamp).toLocaleString()}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="font-mono text-gray-200">{log.ip?.replace('::ffff:', '') || 'Unknown'}</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded-md text-xs font-bold border ${getMethodColor(log.method)}`}>
-                        {log.method}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 max-w-xs truncate" title={log.url}>
-                      <div className="flex items-center">
-                        <Globe className="w-4 h-4 mr-2 text-gray-500" />
-                        {log.url}
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center p-16 text-gray-500">
-            <FileText className="w-16 h-16 mb-4 opacity-20" />
-            <h3 className="text-xl font-medium text-gray-400">No logs found</h3>
-            <p className="mt-1">Adjust your search or wait for incoming traffic.</p>
-          </div>
-        )}
+              <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead style={{ position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 1 }}>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      {['TIME', 'IP', 'METHOD', 'URL', 'UA'].map(h => (
+                        <th key={h} style={{ padding: '9px 14px', fontSize: 9, color: 'var(--text3)', textAlign: 'left', letterSpacing: '0.1em', fontWeight: 500 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((log, i) => {
+                      const mc = METHOD_COLORS[log.method] || 'var(--text2)';
+                      return (
+                        <motion.tr key={i}
+                          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i * 0.01, 0.3) }}
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.02)', transition: 'background 0.1s' }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.015)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <td style={{ padding: '8px 14px', fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)', whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <Clock size={9} />
+                              {fmtTime(log.timestamp)}
+                            </div>
+                          </td>
+                          <td style={{ padding: '8px 14px', fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text2)', whiteSpace: 'nowrap' }}>
+                            {(log.ip || '').replace('::ffff:', '')}
+                          </td>
+                          <td style={{ padding: '8px 14px' }}>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: mc, background: `${mc}15`, border: `1px solid ${mc}30`, padding: '2px 7px', borderRadius: 3, fontFamily: 'var(--mono)', letterSpacing: '0.04em' }}>
+                              {log.method}
+                            </span>
+                          </td>
+                          <td style={{ padding: '8px 14px', fontSize: 11, color: 'var(--text)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'var(--mono)' }} title={log.url}>
+                            {log.url}
+                          </td>
+                          <td style={{ padding: '8px 14px', fontSize: 10, color: 'var(--text3)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={log.userAgent}>
+                            {log.userAgent ? log.userAgent.slice(0, 30) + (log.userAgent.length > 30 ? '…' : '') : '—'}
+                          </td>
+                        </motion.tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
