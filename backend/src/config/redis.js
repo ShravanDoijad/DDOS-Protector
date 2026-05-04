@@ -1,10 +1,9 @@
-const redis = require('ioredis');
+import { Redis } from '@upstash/redis'
+const redisClient = new Redis({
+  url: process.env.REDIS_URL,
+  token: process.env.REDIS_TOKEN,
+})
 
-const redisClient = new redis({
-    host: process.env.REDIS_HOST || 'localhost',
-    port: process.env.REDIS_PORT || 6379,
-    password: process.env.REDIS_PASSWORD || '',
-});
 
 redisClient.on('connect', () => {
     console.log('Connected to Redis successfully');
