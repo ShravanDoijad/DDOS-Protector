@@ -8,22 +8,18 @@ import {
 } from "recharts";
 import { useEffect, useState } from "react";
 
-export default function TrafficChart() {
+export default function TrafficChart({ liveRps = 0 }) {
   const [data, setData] = useState([]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setData((prev) => [
-        ...prev.slice(-10),
-        {
-          time: new Date().toLocaleTimeString(),
-          requests: Math.floor(Math.random() * 1000),
-        },
-      ]);
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, []);
+    setData((prev) => [
+      ...prev.slice(-10),
+      {
+        time: new Date().toLocaleTimeString(),
+        requests: liveRps,
+      },
+    ]);
+  }, [liveRps]);
 
   return (
     <div className="bg-gray-800/60 backdrop-blur-md p-6 rounded-2xl border border-gray-700 shadow-lg">

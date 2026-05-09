@@ -1,0 +1,11 @@
+.env
+*.tgz
+test_attacks.js
+simulate_attack.js
+server.js
+node_modules/
+
+# Ignore Dashboard APIs and DB from NPM Package
+src/routes/
+src/controllers/
+src/config/db.js

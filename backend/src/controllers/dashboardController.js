@@ -16,7 +16,10 @@ const getSummary = async (req, res) => {
     ]);
 
     const parsed = logs
-      .map(l => { try { return JSON.parse(l); } catch { return null; } })
+      .map(l => { 
+        if (typeof l === 'object' && l !== null) return l;
+        try { return JSON.parse(l); } catch { return null; } 
+      })
       .filter(Boolean);
 
     const now = Date.now();
@@ -62,7 +65,10 @@ const getLogs = async (req, res) => {
     const limit = parseInt(req.query.limit) || 200;
     const logs = await redisClient.lrange('request_logs', 0, limit - 1);
     const parsed = logs
-      .map(l => { try { return JSON.parse(l); } catch { return null; } })
+      .map(l => { 
+        if (typeof l === 'object' && l !== null) return l;
+        try { return JSON.parse(l); } catch { return null; } 
+      })
       .filter(Boolean);
     res.json(parsed);
   } catch (err) {
@@ -137,7 +143,7 @@ const blockIp = async (req, res) => {
   try {
     const { ip, duration = 3600 } = req.body;
     if (!ip) return res.status(400).json({ message: 'IP required' });
-    await redisClient.set(`blocked:${ip}`, 'manual', 'EX', duration);
+    await redisClient.set(`blocked:${ip}`, 'manual', { ex: duration });
     res.json({ message: `${ip} blocked for ${duration}s` });
   } catch {
     res.status(500).json({ message: 'Failed to block IP' });
