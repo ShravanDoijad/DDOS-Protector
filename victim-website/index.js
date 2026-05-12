@@ -4,7 +4,7 @@ const shield = require('shravan-ddos-shield'); // <--- Using your very own publi
 
 const app = express();
 
-// Protect this victim website using your security middleware
+
 app.use(shield({ 
     honeypot: { enabled: true },
     botDetection: { enabled: true }

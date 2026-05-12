@@ -9,7 +9,7 @@ router.get('/health', health);
 router.get('/summary', getSummary);
 router.get('/logs', getLogs);
 router.delete('/logs', clearLogs);
-router.get('/threats', getThreats);
+router.get('/Threats', getThreats);
 router.get('/blocked-ips', getBlockedIps);
 router.delete('/blocked-ips/:ip', unblockIp);
 router.post('/blocked-ips', blockIp);

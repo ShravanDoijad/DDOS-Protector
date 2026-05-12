@@ -25,8 +25,8 @@ export const api = {
   },
 
   // Active threats (IPs with score > 0) — /api/dashboard/threats
-  getThreats: async () => {
-    const r = await http.get('/api/dashboard/threats');
+  Threats: async () => {
+    const r = await http.get('/api/dashboard/Threats');
     return r.data;
   },
 

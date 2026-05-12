@@ -27,7 +27,7 @@ function SectionTitle({ children }) {
 
 export default function Dashboard() {
   const { data, loading, error, refetch, lastUpdated } = useLiveData(api.getSummary, 4000);
-  const { data: threats } = useLiveData(api.getThreats, 6000);
+  const { data: threats } = useLiveData(api.Threats, 6000);
 
   const alerts = [];
   if (data?.threats > 0) alerts.push(`${data.threats} active threats detected`);

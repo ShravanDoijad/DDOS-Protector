@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 
 export default function ThreatMonitor() {
-  const { data: threats, loading, error, refetch } = useDashboardData(api.getThreats, 3000);
+  const { data: threats, loading, error, refetch } = useDashboardData(api.Threats, 3000);
 
   const handleBlock = async (ip) => {
     try {

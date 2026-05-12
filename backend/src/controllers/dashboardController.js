@@ -15,6 +15,12 @@ const getSummary = async (req, res) => {
       redisClient.lrange('request_logs', 0, 199),
     ]);
 
+    let actualThreatsCount = 0;
+    if (scoreKeys.length > 0) {
+      const scores = await Promise.all(scoreKeys.map(k => redisClient.get(k)));
+      actualThreatsCount = scores.filter(s => parseInt(s) > 0).length;
+    }
+
     const parsed = logs
       .map(l => { 
         if (typeof l === 'object' && l !== null) return l;
@@ -46,7 +52,7 @@ const getSummary = async (req, res) => {
     res.json({
       requests: parsed.length,
       blocked: blockedKeys.length,
-      threats: scoreKeys.length,
+      threats: actualThreatsCount,
       rps,
       topIps,
       methodBreakdown,
@@ -96,7 +102,11 @@ const getThreats = async (req, res) => {
         const score = parseInt(await redisClient.get(key)) || 0;
         const country = await redisClient.get(`geo:${ip}`);
         const attackType = await redisClient.get(`attack_type:${ip}`);
-        return { ip, score, country: country || null, attackType: attackType || null };
+        
+        const type = attackType || 'Unknown Activity';
+        const severity = score >= 80 ? 'High' : score >= 40 ? 'Medium' : 'Low';
+
+        return { ip, score, country: country || null, type, severity };
       })
     );
     const sorted = threats.filter(t => t.score > 0).sort((a, b) => b.score - a.score);
